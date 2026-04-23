@@ -1,0 +1,6 @@
+<resources>
+    <string name="app_name">cs_manager</string>
+    <string name="app_header_name">Cell Star Manager</string>
+    <string name="description">Esta plataforma está dedicada a la gestión de inventario, producto, y ventas; alertas y reportería de una tienda telefónica y de accesorios</string>
+    <string name="button_login">Login</string>
+</resources>
