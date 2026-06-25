@@ -3,8 +3,10 @@ package com.example.cs_manager.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Search
@@ -14,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.cs_manager.data.CellstarRepository
@@ -28,18 +31,37 @@ import com.example.cs_manager.navigation.Routes
 @Composable
 fun InventoryScreen(navController: NavController) {
     var searchQuery by remember { mutableStateOf("") }
+    var selectedCategory by remember { mutableStateOf("Todos") }
+    var sortBy by remember { mutableStateOf("Nombre") }
+    var sortExpanded by remember { mutableStateOf(false) }
+    var managingProduct by remember { mutableStateOf<Product?>(null) }
 
     // Colores corporativos
     val primaryColor = Color(0xFF1E3A8A)
     val textPrimary = Color(0xFF0F172A)
     val textSecondary = Color(0xFF64748B)
 
-    // Filtrar productos del repositorio de forma reactiva
-    val filteredProducts = CellstarRepository.products.filter { product ->
-        product.name.contains(searchQuery, ignoreCase = true) ||
-        product.sku.contains(searchQuery, ignoreCase = true) ||
-        product.model.contains(searchQuery, ignoreCase = true)
+    val categories = remember {
+        listOf("Todos") + listOf("Celulares", "Accesorios", "Redes", "Hardware", "Audio")
     }
+    val sortOptions = listOf("Nombre", "Precio: Menor a Mayor", "Precio: Mayor a Menor", "Stock: Bajo Primero")
+
+    // Filtrar y ordenar productos del repositorio de forma reactiva
+    val filteredProducts = CellstarRepository.products
+        .filter { product ->
+            (selectedCategory == "Todos" || product.category.equals(selectedCategory, ignoreCase = true)) &&
+            (product.name.contains(searchQuery, ignoreCase = true) ||
+             product.sku.contains(searchQuery, ignoreCase = true) ||
+             product.model.contains(searchQuery, ignoreCase = true))
+        }
+        .sortedWith(
+            when (sortBy) {
+                "Precio: Menor a Mayor" -> compareBy { it.price }
+                "Precio: Mayor a Menor" -> compareByDescending { it.price }
+                "Stock: Bajo Primero" -> compareBy { it.stock }
+                else -> compareBy { it.name }
+            }
+        )
 
     Box(
         modifier = Modifier
@@ -76,7 +98,46 @@ fun InventoryScreen(navController: NavController) {
                 singleLine = true
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Chips de filtro por categorías
+            LazyRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(vertical = 4.dp)
+            ) {
+                items(categories) { category ->
+                    FilterChip(
+                        selected = selectedCategory == category,
+                        onClick = { selectedCategory = category },
+                        label = { Text(category) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = primaryColor.copy(alpha = 0.1f),
+                            selectedLabelColor = primaryColor
+                        )
+                    )
+                }
+            }
+
+            // Barra de ordenamiento
+            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+                TextButton(onClick = { sortExpanded = true }) {
+                    Text("Ordenar por: $sortBy", color = primaryColor, fontWeight = FontWeight.Bold)
+                }
+                DropdownMenu(expanded = sortExpanded, onDismissRequest = { sortExpanded = false }) {
+                    sortOptions.forEach { option ->
+                        DropdownMenuItem(
+                            text = { Text(option) },
+                            onClick = {
+                                sortBy = option
+                                sortExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
 
             if (filteredProducts.isEmpty()) {
                 Box(
@@ -94,7 +155,7 @@ fun InventoryScreen(navController: NavController) {
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     items(filteredProducts) { product ->
-                        ProductInventoryCard(product = product)
+                        ProductInventoryCard(product = product, onManageClick = { managingProduct = product })
                     }
                 }
             }
@@ -117,13 +178,75 @@ fun InventoryScreen(navController: NavController) {
             )
         }
     }
+
+    // Diálogo interactivo para administrar stock
+    if (managingProduct != null) {
+        val product = managingProduct!!
+        var newStockStr by remember(product.sku) { mutableStateOf(product.stock.toString()) }
+        var errorMessage by remember { mutableStateOf("") }
+
+        AlertDialog(
+            onDismissRequest = { managingProduct = null },
+            title = { Text("Administrar Stock - ${product.name}") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("SKU: ${product.sku}\nModelo: ${product.model}", color = textSecondary)
+                    OutlinedTextField(
+                        value = newStockStr,
+                        onValueChange = {
+                            if (it.isEmpty() || it.all { char -> char.isDigit() }) {
+                                newStockStr = it
+                                errorMessage = ""
+                            }
+                        },
+                        label = { Text("Stock Disponible") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (errorMessage.isNotEmpty()) {
+                        Text(errorMessage, color = Color.Red, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val stockVal = newStockStr.toIntOrNull()
+                        if (stockVal == null) {
+                            errorMessage = "Ingrese un stock válido"
+                        } else {
+                            val index = CellstarRepository.products.indexOfFirst { it.sku == product.sku }
+                            if (index != -1) {
+                                val currentProd = CellstarRepository.products[index]
+                                CellstarRepository.products[index] = currentProd.copy(stock = stockVal)
+                                CellstarRepository.logAction(
+                                    CellstarRepository.currentLoggedUser.value,
+                                    "STOCK MANUAL UPDATE - ${product.name} (Nuevo stock: $stockVal)",
+                                    "blue"
+                                )
+                            }
+                            managingProduct = null
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = primaryColor)
+                ) {
+                    Text("Guardar", color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { managingProduct = null }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
 }
 
 /**
  * Tarjeta individual para mostrar un producto en el listado del inventario.
  */
 @Composable
-fun ProductInventoryCard(product: Product) {
+fun ProductInventoryCard(product: Product, onManageClick: () -> Unit) {
     val textPrimary = Color(0xFF0F172A)
     val textSecondary = Color(0xFF64748B)
 
@@ -208,7 +331,7 @@ fun ProductInventoryCard(product: Product) {
                 }
 
                 Button(
-                    onClick = { /* Lógica futura de administración */ },
+                    onClick = onManageClick,
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF1F5F9)),
                     shape = RoundedCornerShape(8.dp),
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)

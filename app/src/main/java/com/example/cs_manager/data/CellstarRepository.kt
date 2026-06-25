@@ -1,7 +1,9 @@
 package com.example.cs_manager.data
 
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -17,7 +19,8 @@ data class Product(
     val category: String,
     val price: Double,
     var stock: Int,
-    val minStock: Int
+    val minStock: Int,
+    val imagePath: String? = null
 )
 
 /**
@@ -39,27 +42,84 @@ data class MovementLog(
 )
 
 /**
+ * Representa una transacción de venta histórica para análisis y auditoría.
+ */
+data class SaleTransaction(
+    val id: String,
+    val dateTime: String,
+    val clientName: String,
+    val clientId: String,
+    val items: List<CartItem>,
+    val totalAmount: Double
+)
+
+/**
+ * Representa las credenciales de un usuario registrado en el sistema.
+ */
+data class RegisteredUser(
+    val fullName: String,
+    val username: String,
+    val email: String,
+    val password: String
+)
+
+/**
+ * Contrato de interfaz para el Repositorio de la aplicación.
+ */
+interface ICellstarRepository {
+    val products: SnapshotStateList<Product>
+    val movementLogs: SnapshotStateList<MovementLog>
+    val cart: SnapshotStateList<CartItem>
+    val salesHistory: SnapshotStateList<SaleTransaction>
+    val registeredUsers: SnapshotStateList<RegisteredUser>
+    val todaySales: MutableState<Double>
+    val weeklyRevenue: MutableState<Double>
+    val unitsMoved: MutableState<Int>
+    val currentLoggedUser: MutableState<String>
+    fun addProduct(product: Product)
+    fun addProductToCart(sku: String): Boolean
+    fun incrementCartItem(sku: String)
+    fun decrementCartItem(sku: String)
+    fun checkout(clientName: String, clientId: String): String
+    fun logAction(user: String, action: String, color: String)
+}
+
+/**
  * Repositorio centralizado con estados reactivos de Jetpack Compose.
  * Actúa como base de datos en memoria para simular flujos interactivos de negocio en tiempo real.
  */
-object CellstarRepository {
+object CellstarRepository : ICellstarRepository {
 
     // Lista reactiva de productos del inventario
-    val products = mutableStateListOf<Product>()
+    override val products = mutableStateListOf<Product>()
 
     // Lista reactiva del historial de movimientos (logs)
-    val movementLogs = mutableStateListOf<MovementLog>()
+    override val movementLogs = mutableStateListOf<MovementLog>()
 
     // Estado reactivo del carrito de compras
-    val cart = mutableStateListOf<CartItem>()
+    override val cart = mutableStateListOf<CartItem>()
+
+    // Historial reactivo de transacciones de ventas
+    override val salesHistory = mutableStateListOf<SaleTransaction>()
+
+    // Lista reactiva de usuarios registrados
+    override val registeredUsers = mutableStateListOf<RegisteredUser>()
 
     // Métricas globales reactivas
-    val todaySales = mutableStateOf(4250.00)
-    val weeklyRevenue = mutableStateOf(28140.50)
-    val unitsMoved = mutableStateOf(1402)
-    val currentLoggedUser = mutableStateOf("Admin")
+    override val todaySales = mutableStateOf(4250.00)
+    override val weeklyRevenue = mutableStateOf(28140.50)
+    override val unitsMoved = mutableStateOf(1402)
+    override val currentLoggedUser = mutableStateOf("Admin")
 
     init {
+        // Cargar usuarios de prueba iniciales
+        registeredUsers.addAll(
+            listOf(
+                RegisteredUser("System Administrator", "Admin", "admin@cellstar.com", "admin123"),
+                RegisteredUser("Carlos Mendoza", "CarlosM", "carlos@cellstar.com", "carlos123"),
+                RegisteredUser("David López", "DavidL", "david@cellstar.com", "david123")
+            )
+        )
         // Cargar productos de demostración basados en las capturas de pantalla
         products.addAll(
             listOf(
@@ -167,7 +227,7 @@ object CellstarRepository {
     /**
      * Añade un nuevo producto al catálogo.
      */
-    fun addProduct(product: Product) {
+    override fun addProduct(product: Product) {
         products.add(product)
         logAction("System", "ADD PRODUCT - ${product.name} (SKU: ${product.sku})", "blue")
     }
@@ -175,7 +235,7 @@ object CellstarRepository {
     /**
      * Agrega un producto al carrito de ventas mediante su SKU.
      */
-    fun addProductToCart(sku: String): Boolean {
+    override fun addProductToCart(sku: String): Boolean {
         val product = products.find { it.sku.equals(sku, ignoreCase = true) } ?: return false
         
         // Comprobar si el producto ya existe en el carrito
@@ -200,7 +260,7 @@ object CellstarRepository {
     /**
      * Incrementa la cantidad de un artículo en el carrito.
      */
-    fun incrementCartItem(sku: String) {
+    override fun incrementCartItem(sku: String) {
         val index = cart.indexOfFirst { it.product.sku == sku }
         if (index != -1) {
             val item = cart[index]
@@ -214,7 +274,7 @@ object CellstarRepository {
     /**
      * Decrementa la cantidad de un artículo en el carrito o lo remueve si llega a 0.
      */
-    fun decrementCartItem(sku: String) {
+    override fun decrementCartItem(sku: String) {
         val index = cart.indexOfFirst { it.product.sku == sku }
         if (index != -1) {
             val item = cart[index]
@@ -232,7 +292,7 @@ object CellstarRepository {
      * registra el log de venta y limpia el carrito.
      * @return El texto estructurado de la factura de venta para compartir.
      */
-    fun checkout(clientName: String, clientId: String): String {
+    override fun checkout(clientName: String, clientId: String): String {
         if (cart.isEmpty()) return ""
 
         val totalAmount = cart.sumOf { it.product.price * it.quantity }
@@ -252,6 +312,9 @@ object CellstarRepository {
             append(String.format("%-18s %3s %9s\n", "Producto", "Cant", "Subtotal"))
             append("-----------------------------------\n")
         }
+
+        // Crear una copia de los items en el carrito antes de limpiarlo
+        val itemsCopy = cart.toList()
 
         cart.forEach { item ->
             val subtotal = item.product.price * item.quantity
@@ -285,6 +348,17 @@ object CellstarRepository {
             append("===================================\n")
         }
 
+        // Registrar la transacción histórica de venta
+        val transaction = SaleTransaction(
+            id = "TX-" + UUID.randomUUID().toString().substring(0, 8).uppercase(),
+            dateTime = getCurrentDateTime(),
+            clientName = if (clientName.isBlank()) "Consumidor Final" else clientName,
+            clientId = clientId,
+            items = itemsCopy,
+            totalAmount = totalAmount
+        )
+        salesHistory.add(0, transaction)
+
         // Incrementar estadísticas financieras
         todaySales.value += totalAmount
         weeklyRevenue.value += totalAmount
@@ -306,7 +380,7 @@ object CellstarRepository {
     /**
      * Añade un registro al historial de logs.
      */
-    fun logAction(user: String, action: String, color: String) {
+    override fun logAction(user: String, action: String, color: String) {
         movementLogs.add(0, MovementLog(getCurrentDateTime(), user, action, color))
     }
 

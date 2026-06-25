@@ -45,12 +45,27 @@ fun ReportsScreen(navController: NavController) {
     val unitsMov = CellstarRepository.unitsMoved.value
     val logs = CellstarRepository.movementLogs
 
-    // Productos más vendidos simulados
-    val topProducts = listOf(
-        Triple("Samsung S23 Ultra 256GB - Black", "SAM-S23U-256-BLK", 42),
-        Triple("iPhone 15 Pro Max 256GB - White", "IPH-15PM-256-WHT", 38),
-        Triple("Funda Silicona iPhone 14 Pro Max", "ACC-APL-SIL-14PM", 29)
-    )
+    // Calcular productos más vendidos dinámicamente desde el historial
+    val dynamicTopProducts = CellstarRepository.salesHistory
+        .flatMap { it.items }
+        .groupBy { it.product.sku }
+        .map { (sku, items) ->
+            val product = items.first().product
+            val totalQty = items.sumOf { it.quantity }
+            Triple(product.name, sku, totalQty)
+        }
+        .sortedByDescending { it.third }
+        .take(5)
+
+    val topProducts = if (dynamicTopProducts.isEmpty()) {
+        listOf(
+            Triple("Samsung Galaxy S23 Ultra - 256GB Black", "SAM-S23U-256-BLK", 12),
+            Triple("Funda Silicona iPhone 14 Pro Max", "ACC-APL-SIL-14PM", 8),
+            Triple("Cable USB-C a USB-C 2M Carga Rápida", "CBL-USBC-2M-FAST", 5)
+        )
+    } else {
+        dynamicTopProducts
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -210,6 +225,16 @@ fun ReportsScreen(navController: NavController) {
                                 Text(
                                     text = "SKU: ${item.second}",
                                     style = MaterialTheme.typography.bodySmall.copy(color = textSecondary)
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                // Barra de progreso gráfica que representa las ventas
+                                val maxSold = topProducts.maxOfOrNull { it.third } ?: 1
+                                val fraction = item.third.toFloat() / maxSold.toFloat()
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth(fraction * 0.8f)
+                                        .height(6.dp)
+                                        .background(primaryColor, shape = RoundedCornerShape(3.dp))
                                 )
                             }
 
