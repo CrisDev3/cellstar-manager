@@ -37,6 +37,16 @@ fun SalesScreen(navController: NavController) {
     var skuInput by remember { mutableStateOf("") }
     var clientId by remember { mutableStateOf("") }
     var clientName by remember { mutableStateOf("") }
+    var showScannerDialog by remember { mutableStateOf(false) }
+
+    val mockClients = remember {
+        mapOf(
+            "12345" to "Juan Pérez",
+            "67890" to "María González",
+            "11223" to "Carlos Rodríguez",
+            "44556" to "Sofía López"
+        )
+    }
 
     // Colores corporativos
     val primaryColor = Color(0xFF1E3A8A)
@@ -98,14 +108,7 @@ fun SalesScreen(navController: NavController) {
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(8.dp),
                             trailingIcon = {
-                                IconButton(onClick = {
-                                    // Simula un escaneo seleccionando un producto aleatorio
-                                    val randomProduct = CellstarRepository.products.randomOrNull()
-                                    if (randomProduct != null) {
-                                        skuInput = randomProduct.sku
-                                        Toast.makeText(context, "Escaner: ${randomProduct.name} leído", Toast.LENGTH_SHORT).show()
-                                    }
-                                }) {
+                                IconButton(onClick = { showScannerDialog = true }) {
                                     Icon(
                                         imageVector = Icons.Default.QrCodeScanner,
                                         contentDescription = "Escanear",
@@ -238,8 +241,14 @@ fun SalesScreen(navController: NavController) {
                     Text("DOCUMENTO (ID)", fontWeight = FontWeight.Bold, color = textPrimary)
                     OutlinedTextField(
                         value = clientId,
-                        onValueChange = { clientId = it },
-                        placeholder = { Text("Ej: 123456789", color = Color.LightGray) },
+                        onValueChange = { newValue ->
+                            clientId = newValue
+                            mockClients[newValue]?.let { name ->
+                                clientName = name
+                                Toast.makeText(context, "Cliente auto-completado: $name", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        placeholder = { Text("", color = Color.LightGray) },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(8.dp)
                     )
@@ -319,6 +328,64 @@ fun SalesScreen(navController: NavController) {
                 }
             }
         }
+    }
+
+    // Diálogo del escáner animado
+    if (showScannerDialog) {
+        LaunchedEffect(Unit) {
+            kotlinx.coroutines.delay(2000)
+            val randomProduct = CellstarRepository.products.randomOrNull()
+            if (randomProduct != null) {
+                val added = CellstarRepository.addProductToCart(randomProduct.sku)
+                if (added) {
+                    skuInput = ""
+                    Toast.makeText(context, "Escaneado: ${randomProduct.name}", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(context, "Producto sin stock", Toast.LENGTH_SHORT).show()
+                }
+            }
+            showScannerDialog = false
+        }
+
+        AlertDialog(
+            onDismissRequest = { showScannerDialog = false },
+            title = { Text("Escáner de Código de Barras / QR", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Text("Iniciando cámara y buscando códigos...", color = Color.Gray)
+                    
+                    Box(
+                        modifier = Modifier
+                            .size(200.dp)
+                            .background(Color.Black, shape = RoundedCornerShape(16.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(0.8f)
+                                .height(2.dp)
+                                .background(Color.Red)
+                        )
+                        Text("[ Visor Activo ]", color = Color.Green, style = MaterialTheme.typography.bodySmall)
+                    }
+                    
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        color = primaryColor,
+                        strokeWidth = 2.dp
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showScannerDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
     }
 }
 

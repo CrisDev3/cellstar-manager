@@ -1,6 +1,9 @@
 package com.example.cs_manager.screens
 
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -19,6 +22,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -46,6 +50,42 @@ fun AddProductScreen(navController: NavController) {
     var priceStr by remember { mutableStateOf("") }
     var initialStockStr by remember { mutableStateOf("") }
     var minStockStr by remember { mutableStateOf("") }
+
+    // Estados para la carga de imágenes reales
+    var selectedImageUri by remember { mutableStateOf<android.net.Uri?>(null) }
+    val bitmapState = remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+
+    LaunchedEffect(selectedImageUri) {
+        selectedImageUri?.let { uri ->
+            try {
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                    val source = android.graphics.ImageDecoder.createSource(context.contentResolver, uri)
+                    bitmapState.value = android.graphics.ImageDecoder.decodeBitmap(source)
+                } else {
+                    @Suppress("DEPRECATION")
+                    bitmapState.value = android.provider.MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: android.net.Uri? ->
+        selectedImageUri = uri
+    }
+
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicturePreview()
+    ) { bitmap: android.graphics.Bitmap? ->
+        if (bitmap != null) {
+            bitmapState.value = bitmap
+            // Simular un URI temporal para consistencia
+            selectedImageUri = android.net.Uri.parse("camera_temp_image")
+        }
+    }
 
     // Categorías y Dropdown
     val categories = listOf("Celulares", "Accesorios", "Redes", "Hardware", "Audio")
@@ -100,7 +140,8 @@ fun AddProductScreen(navController: NavController) {
                                     category = selectedCategory,
                                     price = price,
                                     stock = stock,
-                                    minStock = minStock
+                                    minStock = minStock,
+                                    imagePath = selectedImageUri?.toString()
                                 )
                                 CellstarRepository.addProduct(newProduct)
                                 Toast.makeText(context, "Producto guardado con éxito", Toast.LENGTH_SHORT).show()
@@ -150,34 +191,41 @@ fun AddProductScreen(navController: NavController) {
                     )
 
                     Spacer(modifier = Modifier.height(12.dp))
-
-                    // Caja punteada para imagen
+                    // Caja de previsualización para imagen
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(130.dp)
                             .background(Color(0xFFEFF6FF), shape = RoundedCornerShape(12.dp))
                             .clickable {
-                                Toast
-                                    .makeText(context, "Apertura de galería (Simulado)", Toast.LENGTH_SHORT)
-                                    .show()
+                                imagePickerLauncher.launch("image/*")
                             },
                         contentAlignment = Alignment.Center
                     ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(
-                                imageVector = Icons.Default.CameraAlt,
-                                contentDescription = null,
-                                tint = primaryColor,
-                                modifier = Modifier.size(36.dp)
+                        val bitmap = bitmapState.value
+                        if (bitmap != null) {
+                            Image(
+                                bitmap = bitmap.asImageBitmap(),
+                                contentDescription = "Previsualización de imagen",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop
                             )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                "Tocar para añadir imagen",
-                                color = primaryColor,
-                                fontWeight = FontWeight.SemiBold,
-                                style = MaterialTheme.typography.bodyMedium
-                            )
+                        } else {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(
+                                    imageVector = Icons.Default.CameraAlt,
+                                    contentDescription = null,
+                                    tint = primaryColor,
+                                    modifier = Modifier.size(36.dp)
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    "Tocar para añadir imagen",
+                                    color = primaryColor,
+                                    fontWeight = FontWeight.SemiBold,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
                         }
                     }
 
@@ -189,7 +237,7 @@ fun AddProductScreen(navController: NavController) {
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         OutlinedButton(
-                            onClick = { Toast.makeText(context, "Galería (Simulado)", Toast.LENGTH_SHORT).show() },
+                            onClick = { imagePickerLauncher.launch("image/*") },
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(8.dp)
                         ) {
@@ -199,7 +247,7 @@ fun AddProductScreen(navController: NavController) {
                         }
 
                         Button(
-                            onClick = { Toast.makeText(context, "Cámara (Simulado)", Toast.LENGTH_SHORT).show() },
+                            onClick = { cameraLauncher.launch(null) },
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(8.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = primaryColor)
@@ -368,7 +416,11 @@ fun AddProductScreen(navController: NavController) {
                     Text("Precio de Venta *", fontWeight = FontWeight.Bold, color = textPrimary)
                     OutlinedTextField(
                         value = priceStr,
-                        onValueChange = { priceStr = it },
+                        onValueChange = { newValue ->
+                            if (newValue.isEmpty() || newValue.matches(Regex("^\\d*\\.?\\d*$"))) {
+                                priceStr = newValue
+                            }
+                        },
                         placeholder = { Text("$ 0.00", color = Color.LightGray) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.fillMaxWidth(),
@@ -384,7 +436,11 @@ fun AddProductScreen(navController: NavController) {
                             Text("Stock Inicial *", fontWeight = FontWeight.Bold, color = textPrimary)
                             OutlinedTextField(
                                 value = initialStockStr,
-                                onValueChange = { initialStockStr = it },
+                                onValueChange = { newValue ->
+                                    if (newValue.isEmpty() || newValue.all { it.isDigit() }) {
+                                        initialStockStr = newValue
+                                    }
+                                },
                                 placeholder = { Text("0", color = Color.LightGray) },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 modifier = Modifier.fillMaxWidth(),
@@ -396,7 +452,11 @@ fun AddProductScreen(navController: NavController) {
                             Text("Stock Mínimo *", fontWeight = FontWeight.Bold, color = textPrimary)
                             OutlinedTextField(
                                 value = minStockStr,
-                                onValueChange = { minStockStr = it },
+                                onValueChange = { newValue ->
+                                    if (newValue.isEmpty() || newValue.all { it.isDigit() }) {
+                                        minStockStr = newValue
+                                    }
+                                },
                                 placeholder = { Text("0", color = Color.LightGray) },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 modifier = Modifier.fillMaxWidth(),
