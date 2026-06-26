@@ -5,6 +5,7 @@ package com.example.cs_manager.navigation
  */
 object Routes {
     const val LOGIN = "login"
+    const val SIGNUP = "signup"
     const val HOME = "home/{username}"
     const val INVENTORY = "inventory"
     const val REPORTS = "reports"
