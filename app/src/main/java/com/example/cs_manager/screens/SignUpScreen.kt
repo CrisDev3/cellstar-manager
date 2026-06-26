@@ -55,35 +55,36 @@ fun SignUpScreen(navController: NavController) {
     val primaryColor = Color(0xFF1E3A8A)
     val secondaryColor = Color(0xFF3B82F6)
 
-    val doSignUp = {
-        val emailPattern = android.util.Patterns.EMAIL_ADDRESS
+    // Lógica de registro memorizada para evitar recreación en recomposiciones
+    val doSignUp = remember {
+        {
+            val emailPattern = android.util.Patterns.EMAIL_ADDRESS
 
-        if (fullName.isBlank() || username.isBlank() || email.isBlank() || password.isBlank()) {
-            error = "Todos los campos son obligatorios"
-        } else if (!username.all { it.isLetterOrDigit() }) {
-            error = "El nombre de usuario debe ser alfanumérico"
-        } else if (!emailPattern.matcher(email).matches()) {
-            error = "Ingrese un correo electrónico válido"
-        } else if (password.length < 6) {
-            error = "La contraseña debe tener al menos 6 caracteres"
-        } else if (CellstarRepository.registeredUsers.any { it.username.equals(username, ignoreCase = true) }) {
-            error = "El nombre de usuario ya está registrado"
-        } else if (CellstarRepository.registeredUsers.any { it.email.equals(email, ignoreCase = true) }) {
-            error = "El correo electrónico ya está registrado"
-        } else {
-            // Guardar usuario de forma momentánea en el repositorio reactivo
-            val newUser = RegisteredUser(
-                fullName = fullName,
-                username = username,
-                email = email,
-                password = password
-            )
-            CellstarRepository.registeredUsers.add(newUser)
-            CellstarRepository.logAction("System", "SIGN UP - @$username registrado con éxito", "blue")
-            
-            Toast.makeText(context, "Usuario registrado con éxito", Toast.LENGTH_SHORT).show()
-            navController.navigate(Routes.LOGIN) {
-                popUpTo(Routes.SIGNUP) { inclusive = true }
+            if (fullName.isBlank() || username.isBlank() || email.isBlank() || password.isBlank()) {
+                error = "Todos los campos son obligatorios"
+            } else if (!username.all { it.isLetterOrDigit() }) {
+                error = "El nombre de usuario debe ser alfanumérico"
+            } else if (!emailPattern.matcher(email).matches()) {
+                error = "Ingrese un correo electrónico válido"
+            } else if (password.length < 6) {
+                error = "La contraseña debe tener al menos 6 caracteres"
+            } else if (CellstarRepository.registeredUsers.any { it.username.equals(username, ignoreCase = true) }) {
+                error = "El nombre de usuario ya está registrado"
+            } else if (CellstarRepository.registeredUsers.any { it.email.equals(email, ignoreCase = true) }) {
+                error = "El correo electrónico ya está registrado"
+            } else {
+                val newUser = RegisteredUser(
+                    fullName = fullName,
+                    username = username,
+                    email = email,
+                    password = password
+                )
+                CellstarRepository.registerUser(newUser)
+
+                Toast.makeText(context, "Usuario registrado con éxito", Toast.LENGTH_SHORT).show()
+                navController.navigate(Routes.LOGIN) {
+                    popUpTo(Routes.SIGNUP) { inclusive = true }
+                }
             }
         }
     }

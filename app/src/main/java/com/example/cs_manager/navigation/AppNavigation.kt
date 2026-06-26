@@ -200,7 +200,7 @@ fun AppNavigation(navController: NavHostController) {
                     Button(
                         onClick = {
                             scope.launch { drawerState.close() }
-                            CellstarRepository.currentLoggedUser.value = ""
+                            CellstarRepository.clearLastLoggedUser()
                             navController.navigate(Routes.LOGIN) {
                                 popUpTo(0) { inclusive = true }
                             }

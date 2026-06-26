@@ -1,17 +1,14 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.google.ksp)
 }
 
 android {
 
     namespace = "com.example.cs_manager"
 
-    compileSdk {
-        version = release(36) {
-            minorApiLevel = 1
-        }
-    }
+    compileSdk = 36
 
     defaultConfig {
 
@@ -93,6 +90,14 @@ dependencies {
     implementation(
         "androidx.compose.material:material-icons-extended"
     )
+
+    // Room Database
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)
+
+    // Gson for JSON serialization
+    implementation(libs.gson)
 
     testImplementation(libs.junit)
 

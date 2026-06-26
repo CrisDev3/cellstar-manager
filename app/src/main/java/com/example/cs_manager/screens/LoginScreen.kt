@@ -43,7 +43,27 @@ fun LoginScreen(navController: NavController) {
     // Colores personalizados premium
     val primaryColor = Color(0xFF1E3A8A) // Azul profundo corporativo
     val secondaryColor = Color(0xFF3B82F6) // Azul brillante
-    val backgroundColor = Color(0xFFF3F4F6) // Gris muy claro limpio
+
+    // Lógica de inicio de sesión memorizada para evitar recreación en recomposiciones
+    val doLogin = remember {
+        {
+            if (username.isBlank() || password.isBlank()) {
+                error = "Todos los campos son obligatorios"
+            } else {
+                val matchedUser = CellstarRepository.registeredUsers.find {
+                    it.username.equals(username, ignoreCase = true) && it.password == password
+                }
+                if (matchedUser != null) {
+                    CellstarRepository.saveLastLoggedUser(matchedUser.username)
+                    navController.navigate(Routes.createHomeRoute(matchedUser.username)) {
+                        popUpTo(Routes.LOGIN) { inclusive = true }
+                    }
+                } else {
+                    error = "Usuario o contraseña incorrectos"
+                }
+            }
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -80,7 +100,7 @@ fun LoginScreen(navController: NavController) {
                         modifier = Modifier.fillMaxSize()
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Person, // Reemplazo premium para el icono de Cellstar
+                            imageVector = Icons.Default.Person,
                             contentDescription = "Logo",
                             tint = Color.White,
                             modifier = Modifier.size(36.dp)
@@ -106,27 +126,6 @@ fun LoginScreen(navController: NavController) {
                 )
 
                 Spacer(modifier = Modifier.height(32.dp))
-
-                // Campo Usuario
-                // Bloque común de lógica para iniciar sesión
-                val doLogin = {
-                    if (username.isBlank() || password.isBlank()) {
-                        error = "Todos los campos son obligatorios"
-                    } else {
-                        // Buscar el usuario en la lista de usuarios registrados
-                        val matchedUser = CellstarRepository.registeredUsers.find {
-                            it.username.equals(username, ignoreCase = true) && it.password == password
-                        }
-                        if (matchedUser != null) {
-                            CellstarRepository.currentLoggedUser.value = matchedUser.username
-                            navController.navigate(Routes.createHomeRoute(matchedUser.username)) {
-                                popUpTo(Routes.LOGIN) { inclusive = true }
-                            }
-                        } else {
-                            error = "Usuario o contraseña incorrectos"
-                        }
-                    }
-                }
 
                 // Campo Usuario
                 Column(modifier = Modifier.fillMaxWidth()) {

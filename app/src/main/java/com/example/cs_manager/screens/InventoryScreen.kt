@@ -215,16 +215,12 @@ fun InventoryScreen(navController: NavController) {
                         if (stockVal == null) {
                             errorMessage = "Ingrese un stock válido"
                         } else {
-                            val index = CellstarRepository.products.indexOfFirst { it.sku == product.sku }
-                            if (index != -1) {
-                                val currentProd = CellstarRepository.products[index]
-                                CellstarRepository.products[index] = currentProd.copy(stock = stockVal)
-                                CellstarRepository.logAction(
-                                    CellstarRepository.currentLoggedUser.value,
-                                    "STOCK MANUAL UPDATE - ${product.name} (Nuevo stock: $stockVal)",
-                                    "blue"
-                                )
-                            }
+                            CellstarRepository.updateProductStock(product.sku, stockVal)
+                            CellstarRepository.logAction(
+                                CellstarRepository.currentLoggedUser.value,
+                                "STOCK MANUAL UPDATE - ${product.name} (Nuevo stock: $stockVal)",
+                                "blue"
+                            )
                             managingProduct = null
                         }
                     },
